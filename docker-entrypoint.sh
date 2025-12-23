@@ -64,7 +64,14 @@ else
     ls /usr/share | grep -i vnc || echo "No VNC directories found"
 fi
 
-# 6a. FORCE RESET SESSION (If Requested via ENV)
+# 6a. ALWAYS REMOVE LOCK FILES (Prevent "profile in use" error)
+echo "🧹 Removing browser lock files..."
+rm -f /app/browser-data/SingletonLock /app/browser-data/SingletonCookie /app/browser-data/SingletonSocket
+rm -f /app/browser-data/Default/SingletonLock /app/browser-data/Default/SingletonCookie /app/browser-data/Default/SingletonSocket
+rm -f /app/browser-data/.org.chromium.Chromium* 
+echo "✅ Lock files removed."
+
+# 6b. FORCE RESET SESSION (If Requested via ENV)
 if [ "$FORCE_RESET" = "true" ]; then
     echo "⚠️ FORCE_RESET detected! Wiping browser data..."
     rm -rf /app/browser-data/*
