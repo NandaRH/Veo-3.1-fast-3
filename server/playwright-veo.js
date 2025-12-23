@@ -179,9 +179,9 @@ export const launchBrowser = async (options = {}) => {
 
       // Add proxy if configured
       if (proxyServer) {
-        console.log("[Playwright] 🌐 Using PROXY:", proxyServer);
+        console.log("[Playwright] 🌐 Using SOCKS5 PROXY:", proxyServer);
         launchOptions.proxy = {
-          server: `http://${proxyServer}`,
+          server: `socks5://${proxyServer}`,
         };
         if (proxyUser && proxyPass) {
           launchOptions.proxy.username = proxyUser;
