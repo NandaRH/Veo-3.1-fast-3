@@ -8,10 +8,14 @@ import stealthPlugin from "puppeteer-extra-plugin-stealth";
 import path from "node:path";
 import fs from "node:fs";
 import { EventEmitter } from "node:events";
+import proxyChain from "proxy-chain";
 
 // Apply stealth plugin
 chromium.use(stealthPlugin());
 firefox.use(stealthPlugin());
+
+// Proxy chain URL (will be set when browser launches)
+let anonymizedProxyUrl = null;
 
 // Path untuk menyimpan session browser (persistent login)
 const USER_DATA_DIR = path.resolve(process.cwd(), "browser-data");
@@ -177,16 +181,27 @@ export const launchBrowser = async (options = {}) => {
         timezoneId: "Asia/Jakarta",
       };
 
-      // Add proxy if configured
-      if (proxyServer) {
-        console.log("[Playwright] 🌐 Using HTTP PROXY:", proxyServer);
+      // Add proxy if configured - using proxy-chain to handle authentication
+      if (proxyServer && proxyUser && proxyPass) {
+        console.log("[Playwright] 🌐 Setting up proxy-chain for:", proxyServer);
+        const proxyUrl = `http://${proxyUser}:${proxyPass}@${proxyServer}`;
+        try {
+          // proxy-chain creates a local proxy server that handles authentication
+          anonymizedProxyUrl = await proxyChain.anonymizeProxy(proxyUrl);
+          console.log("[Playwright] ✅ Proxy-chain ready:", anonymizedProxyUrl);
+          launchOptions.proxy = {
+            server: anonymizedProxyUrl,
+          };
+        } catch (proxyError) {
+          console.error("[Playwright] ❌ Proxy-chain setup failed:", proxyError.message);
+          console.log("[Playwright] ⚠️ Falling back to direct connection");
+        }
+      } else if (proxyServer) {
+        // Proxy without auth - use directly
+        console.log("[Playwright] 🌐 Using direct proxy:", proxyServer);
         launchOptions.proxy = {
           server: `http://${proxyServer}`,
         };
-        if (proxyUser && proxyPass) {
-          launchOptions.proxy.username = proxyUser;
-          launchOptions.proxy.password = proxyPass;
-        }
       } else {
         console.log("[Playwright] ⚠️ No proxy configured, using direct connection");
       }

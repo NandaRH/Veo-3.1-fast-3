@@ -29,6 +29,7 @@
     "next": "^14.2.35",
     "playwright": "^1.49.1",
     "playwright-extra": "^4.3.6",
+    "proxy-chain": "^2.7.0",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
