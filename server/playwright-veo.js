@@ -42,6 +42,10 @@ let capturedRecaptchaToken = null;
 let tokenCapturedAt = null;
 let isCapturingToken = false;
 
+// Bearer token storage (auto-captured from browser)
+let capturedBearerToken = null;
+let bearerCapturedAt = null;
+
 /**
  * Pastikan folder browser-data ada
  */
@@ -286,12 +290,37 @@ const setupRecaptchaInterceptor = async () => {
           }
         } catch (_) { }
       }
+      // Capture Bearer token from Authorization header
+      if (url.includes("googleapis.com") || url.includes("aisandbox-pa.googleapis.com")) {
+        try {
+          const request = response.request();
+          const headers = request.headers();
+          const authHeader = headers["authorization"] || headers["Authorization"];
+          if (authHeader && authHeader.startsWith("Bearer ")) {
+            const newBearer = authHeader.replace("Bearer ", "");
+            // Only update if it's different or newer
+            if (newBearer !== capturedBearerToken) {
+              capturedBearerToken = newBearer;
+              bearerCapturedAt = Date.now();
+              console.log("[Playwright] ✓ Bearer token captured! Length:", capturedBearerToken.length);
+              veoEvents.emit("bearer-token-captured", {
+                token: capturedBearerToken.substring(0, 50) + "...",
+                length: capturedBearerToken.length,
+                timestamp: bearerCapturedAt
+              });
+
+              // Update environment variable for immediate use
+              process.env.LABS_BEARER = capturedBearerToken;
+            }
+          }
+        } catch (_) { }
+      }
     } catch (err) {
       // Ignore errors during interception
     }
   });
 
-  console.log("[Playwright] reCAPTCHA interceptor setup complete");
+  console.log("[Playwright] Network interceptor setup complete (reCAPTCHA + Bearer)");
 };
 
 /**
@@ -385,7 +414,9 @@ export const getBrowserStatus = async () => {
     isLoggedIn: false,
     isOnVideoFx: false,
     hasToken: !!capturedRecaptchaToken && (Date.now() - tokenCapturedAt < 5400000), // < 1.5 jam
-    tokenAge: tokenCapturedAt ? Math.floor((Date.now() - tokenCapturedAt) / 1000) : null
+    tokenAge: tokenCapturedAt ? Math.floor((Date.now() - tokenCapturedAt) / 1000) : null,
+    hasBearer: !!capturedBearerToken && (Date.now() - bearerCapturedAt < 3600000), // < 1 jam
+    bearerAge: bearerCapturedAt ? Math.floor((Date.now() - bearerCapturedAt) / 1000) : null
   };
 
   if (activePage) {
@@ -432,6 +463,35 @@ export const getRecaptchaToken = async () => {
     error: "Token tidak tersedia atau sudah expired. Silakan generate di browser untuk capture token baru.",
     hasToken: !!capturedRecaptchaToken,
     age: tokenCapturedAt ? Math.floor((Date.now() - tokenCapturedAt) / 1000) : null
+  };
+};
+
+/**
+ * Get captured Bearer token from browser
+ * Token valid sekitar 1 jam setelah capture
+ */
+export const getCapturedBearer = async () => {
+  const BEARER_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+  if (capturedBearerToken && bearerCapturedAt) {
+    const age = Date.now() - bearerCapturedAt;
+    if (age < BEARER_MAX_AGE_MS) {
+      return {
+        success: true,
+        token: capturedBearerToken,
+        age: Math.floor(age / 1000),
+        maxAge: BEARER_MAX_AGE_MS / 1000,
+        fresh: age < 300000 // < 5 minutes = fresh
+      };
+    }
+  }
+
+  // Token expired or not available
+  return {
+    success: false,
+    error: "Bearer tidak tersedia atau sudah expired. User perlu berinteraksi dengan Google Labs di browser.",
+    hasBearer: !!capturedBearerToken,
+    age: bearerCapturedAt ? Math.floor((Date.now() - bearerCapturedAt) / 1000) : null
   };
 };
 
@@ -1003,6 +1063,7 @@ export default {
   navigateToLabs,
   getBrowserStatus,
   getRecaptchaToken,
+  getCapturedBearer,
   triggerRecaptchaCapture,
   executeApiRequest,
   generateVideo,
